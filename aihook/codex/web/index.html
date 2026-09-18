@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Hook · Codex</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+  <main>
+    <header>
+      <div class="brand">AI Hook</div>
+      <h1>Codex</h1>
+      <p class="lede">实时 hook 事件流</p>
+      <div class="meta">
+        <span id="conn" class="pill off">未连接</span>
+        <span id="state" class="pill muted">state —</span>
+        <span id="session" class="pill muted">session —</span>
+      </div>
+    </header>
+
+    <section class="feed" aria-label="hook events">
+      <div class="feed-head">
+        <h2>Events</h2>
+        <button type="button" id="btnClear" class="ghost">清空视图</button>
+      </div>
+      <ol id="list" class="list"></ol>
+      <p id="empty" class="empty">等待 Codex 触发 hook…</p>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

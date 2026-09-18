@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>知言 — 快捷键</title>
+  <link rel="stylesheet" href="style.css?v=zhiyan1" />
+</head>
+<body>
+  <div class="bg"></div>
+  <main>
+    <header class="top">
+      <div class="brand">知言</div>
+      <p class="lede">连接接收端，自定义 Voice / Yes / No 在电脑上的按键。系统抢走的键也能用点选设好。</p>
+      <div class="conn">
+        <button type="button" id="btnConnect" class="primary">连接接收端</button>
+        <button type="button" id="btnDisconnect" class="ghost" hidden>断开</button>
+        <button type="button" id="btnPickPort" class="ghost">重选串口</button>
+        <span id="status" class="status off">未连接</span>
+      </div>
+      <p class="conn-hint">Chrome / Edge · 本机 <code>localhost</code> 或局域网 <strong>HTTPS</strong>（见 README）</p>
+    </header>
+
+    <figure class="device-stage" aria-label="知言手持外观">
+      <div class="vk" id="device">
+        <div class="vk-shadow" aria-hidden="true"></div>
+        <div class="vk-body">
+          <div class="vk-plate">
+            <div class="vk-lcd" id="deviceScreen" title="手持屏">
+              <div class="vk-lcd-bezel">
+                <canvas class="vk-lcd-canvas" id="lcdCanvas" width="160" height="80" aria-label="手持屏预览"></canvas>
+              </div>
+            </div>
+            <div class="vk-bay" aria-label="三键">
+              <button type="button" class="vk-key" data-slot="voice" title="Voice" aria-label="Voice">
+                <span class="vk-key-face">
+                  <svg class="vk-mic" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M12 14a3.2 3.2 0 0 0 3.2-3.2V6.2a3.2 3.2 0 1 0-6.4 0v4.6A3.2 3.2 0 0 0 12 14zm6.2-3.2h-1.5a4.7 4.7 0 0 1-9.4 0H5.8a6.2 6.2 0 0 0 5.45 5.55V19H8.8v1.5h6.4V19h-2.45v-2.65A6.2 6.2 0 0 0 18.2 10.8z"/>
+                  </svg>
+                </span>
+              </button>
+              <button type="button" class="vk-key" data-slot="yes" title="Yes" aria-label="Yes">
+                <span class="vk-key-face"><span class="vk-key-lbl">Yes</span></span>
+              </button>
+              <button type="button" class="vk-key" data-slot="no" title="No" aria-label="No">
+                <span class="vk-key-face"><span class="vk-key-lbl">No</span></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption class="device-cap">160×80 固件 UI · 点选键帽或下方卡片编辑映射</figcaption>
+    </figure>
+
+    <section class="panel" aria-label="三键映射">
+      <div class="panel-head">
+        <h2 class="panel-title">三键映射</h2>
+        <p class="panel-sub">先点选 Voice / Yes / No，再用下方点选设组合</p>
+      </div>
+      <div class="keys">
+        <article class="keycard" data-slot="voice">
+          <header class="keycard-top">
+            <h3>Voice</h3>
+            <p class="hint">按住说话 · 松开结束</p>
+          </header>
+          <div class="binding" id="label-voice">—</div>
+          <div class="actions">
+            <button type="button" class="ghost" data-rec="voice" title="可选；系统抢键时请改用下方点选">键盘录制</button>
+            <button type="button" class="ghost" data-clear="voice">清除</button>
+          </div>
+        </article>
+        <article class="keycard" data-slot="yes">
+          <header class="keycard-top">
+            <h3>Yes</h3>
+            <p class="hint">按住连发 · 松开抬起</p>
+          </header>
+          <div class="binding" id="label-yes">—</div>
+          <div class="actions">
+            <button type="button" class="ghost" data-rec="yes" title="可选；系统抢键时请改用下方点选">键盘录制</button>
+            <button type="button" class="ghost" data-clear="yes">清除</button>
+          </div>
+        </article>
+        <article class="keycard" data-slot="no">
+          <header class="keycard-top">
+            <h3>No</h3>
+            <p class="hint">按住连删 · 松开抬起</p>
+          </header>
+          <div class="binding" id="label-no">—</div>
+          <div class="actions">
+            <button type="button" class="ghost" data-rec="no" title="可选；系统抢键时请改用下方点选">键盘录制</button>
+            <button type="button" class="ghost" data-clear="no">清除</button>
+          </div>
+        </article>
+      </div>
+      <div class="bl-block" aria-label="手持屏背光">
+        <span class="bl-label">背光</span>
+        <input id="blRange" type="range" min="0" max="100" value="25" disabled aria-label="亮度" />
+        <span id="blValue" class="bl-value">25%</span>
+      </div>
+      <label class="idle-block" aria-label="闲置息屏">
+        <input id="idleBlank" type="checkbox" disabled />
+        <span class="idle-text">闲置息屏</span>
+        <span class="idle-hint">开启后约 20 秒无操作关背光；按任意键或 OSD 唤醒</span>
+      </label>
+    </section>
+
+    <section class="panel panel-compose" aria-label="点选组合">
+      <div class="panel-head">
+        <h2 class="panel-title">点选组合</h2>
+        <p class="panel-sub" id="composeSub">正在编辑 <strong id="focusName">Voice</strong> · 点修饰键立刻生效</p>
+      </div>
+      <p class="tip" id="bindTip">
+        推荐：点下面的修饰键拼组合。右 Ctrl 被其它软件占用时，网页「键盘录制」听不到它——点「右 Ctrl」即可。
+      </p>
+      <div class="mod-groups" id="modChips"></div>
+      <div class="compose-row">
+        <input id="keyInput" type="text" spellcheck="false" maxlength="12" placeholder="可选普通键：V / Enter / Space（可留空）" autocomplete="off" />
+        <button type="button" id="btnApplyKey" class="primary">加上普通键</button>
+        <button type="button" id="btnClearKey" class="ghost">去掉普通键</button>
+      </div>
+      <div class="presets-row">
+        <span class="presets-label">一键预设</span>
+        <div class="chips" id="presets"></div>
+      </div>
+    </section>
+
+    <div class="dock-spacer" aria-hidden="true"></div>
+  </main>
+
+  <footer class="dock">
+    <div class="dock-inner">
+      <div class="dock-actions">
+        <button type="button" id="btnLoad" class="ghost" disabled>读取</button>
+        <button type="button" id="btnSave" class="primary" disabled>保存到设备</button>
+        <button type="button" id="btnReset" class="ghost" disabled>恢复默认</button>
+      </div>
+      <p id="log" class="log"></p>
+    </div>
+  </footer>
+
+  <script src="app.js?v=zhiyan1"></script>
+</body>
+</html>

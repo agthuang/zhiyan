@@ -1,0 +1,26 @@
+.worktrees/
+worktrees/
+.DS_Store
+*.o
+*.pyc
+__pycache__/
+
+# ESP-IDF / PlatformIO
+.pio/
+build/
+managed_components/
+dependencies.lock
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+
+firmware/handheld/build/
+firmware/receiver/build/
+firmware/**/.pio/
+firmware/components/common/tests/test_all
+docs/ui-preview/*.ppm
+web/keymap/.certs/
+
+# AI Hook runtime
+aihook/codex/data/*.jsonl
+aihook/codex/data/*.log
