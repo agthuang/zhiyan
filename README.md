@@ -111,7 +111,7 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 
 ## 可选组件
 
-- **键位网页** [`web/keymap/`](web/keymap/) — 改三键、背光、看状态。  
+- **键位网页** [在线打开](https://agthuang.github.io/zhiyan/)（源码 [`web/keymap/`](web/keymap/)）。用 Chrome / Edge，接收端插在打开网页的这台电脑上。改三键、背光、看状态。  
 - **AI Hook** [`aihook/`](aihook/) — Codex 生命周期推 OSD 到手持（`O #RRGGBB WORD`）。  
 - **tools/** — `flash_*.sh`（PlatformIO 可选路径）、`set_time.sh`、`serve_keymap.sh` 等。
 
