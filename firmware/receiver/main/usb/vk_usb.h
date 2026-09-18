@@ -7,6 +7,9 @@
 
 void vk_usb_init(void);
 bool vk_usb_hid_ready(void);
+/** One attempt. False if the host has not accepted the report yet — caller must retry.
+ *  A dropped all-zero report leaves modifiers stuck until USB unplug. */
+bool vk_usb_try_report(uint8_t modifiers, uint8_t keycode);
 void vk_usb_send_report(const vk_hid_report_t *r);
 void vk_usb_cdc_printf(const char *fmt, ...);
 uint32_t vk_usb_unix_time(void);

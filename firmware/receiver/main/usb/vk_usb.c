@@ -329,21 +329,21 @@ bool vk_usb_hid_ready(void)
     return tud_mounted() && tud_hid_ready();
 }
 
-static void hid_report(uint8_t modifiers, uint8_t keycode)
+bool vk_usb_try_report(uint8_t modifiers, uint8_t keycode)
 {
-    uint8_t report[8] = {modifiers, 0, keycode, 0, 0, 0, 0, 0};
-    /* Release (all-zero) must not be silently dropped — host keeps modifiers sticky. */
-    int tries = (modifiers == 0 && keycode == 0) ? 12 : 1;
-    for (int i = 0; i < tries; i++) {
-        if (vk_usb_hid_ready()) {
-            tud_hid_n_report(0, 0, report, sizeof(report));
-            return;
-        }
-        if (tries == 1) {
-            return;
-        }
-        vTaskDelay(pdMS_TO_TICKS(2));
+    if (!s_hid_mu) {
+        return false;
     }
+    if (xSemaphoreTake(s_hid_mu, 0) != pdTRUE) {
+        return false;
+    }
+    bool ok = false;
+    if (vk_usb_hid_ready()) {
+        uint8_t report[8] = {modifiers, 0, keycode, 0, 0, 0, 0, 0};
+        ok = tud_hid_n_report(0, 0, report, sizeof(report));
+    }
+    xSemaphoreGive(s_hid_mu);
+    return ok;
 }
 
 void vk_usb_send_report(const vk_hid_report_t *r)
@@ -351,15 +351,16 @@ void vk_usb_send_report(const vk_hid_report_t *r)
     if (!r) {
         return;
     }
-    xSemaphoreTake(s_hid_mu, portMAX_DELAY);
+    /* Pulse is unused by the keymap; still release afterwards so a modifier cannot stick. */
     if (r->pulse) {
-        hid_report(r->modifiers, r->keycode);
+        for (int i = 0; i < 8 && !vk_usb_try_report(r->modifiers, r->keycode); i++) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+        }
         vTaskDelay(pdMS_TO_TICKS(12));
-        hid_report(0, 0);
-    } else {
-        hid_report(r->modifiers, r->keycode);
     }
-    xSemaphoreGive(s_hid_mu);
+    for (int i = 0; i < 8 && !vk_usb_try_report(r->pulse ? 0 : r->modifiers, r->pulse ? 0 : r->keycode); i++) {
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
 }
 
 static void keymap_nvs_save(const vk_hid_map_t *map)

@@ -30,22 +30,42 @@ static QueueHandle_t s_q_key;  /* keys only — must not drop under audio flood 
 static bool s_voice_held;
 static uint32_t s_voice_held_ms;
 static uint32_t s_last_voice_audio_ms;
+static uint8_t s_want_mod;
+static uint8_t s_want_key;
+static bool s_hid_pending;
 
 static uint32_t now_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000ULL);
 }
 
-static void force_keys_up(void)
+static void hid_set(uint8_t modifiers, uint8_t keycode)
 {
-    vk_hid_report_t clear = {0};
-    vk_usb_send_report(&clear);
-    if (s_voice_held) {
-        audio_ring_set_live(false);
-        s_voice_held = false;
-        vk_usb_cdc_printf("key 0 up\r\n"); /* mirror Voice release */
-        ESP_LOGW(TAG, "force keys up (lost Voice UP?)");
+    s_want_mod = modifiers;
+    s_want_key = keycode;
+    s_hid_pending = true;
+}
+
+static void hid_flush(void)
+{
+    if (!s_hid_pending) {
+        return;
     }
+    if (vk_usb_try_report(s_want_mod, s_want_key)) {
+        s_hid_pending = false;
+    }
+}
+
+static void force_keys_up(const char *why)
+{
+    hid_set(0, 0);
+    if (!s_voice_held) {
+        return;
+    }
+    audio_ring_set_live(false);
+    s_voice_held = false;
+    vk_usb_cdc_printf("key 0 up\r\n"); /* mirror Voice release */
+    ESP_LOGW(TAG, "force keys up (%s)", why);
 }
 
 static void on_radio(const uint8_t mac[6], const vk_hdr_t *hdr, const uint8_t *payload, void *ctx)
@@ -62,13 +82,20 @@ static void on_radio(const uint8_t mac[6], const vk_hdr_t *hdr, const uint8_t *p
         memcpy(msg.payload, payload, n);
         msg.hdr.len = n;
     }
-    /* Keys get a dedicated queue so audio never starves Voice UP. */
+    /* Keys get a dedicated queue so audio never starves Voice UP.
+     * If the queue is full, never evict a queued UP to store a DOWN. */
     if (hdr->type == VK_PKT_KEY) {
         if (xQueueSend(s_q_key, &msg, 0) != pdTRUE) {
-            /* Extremely full: drop one slot then retry (still never drop into audio Q). */
             rx_msg_t dump;
-            (void)xQueueReceive(s_q_key, &dump, 0);
-            (void)xQueueSend(s_q_key, &msg, 0);
+            bool incoming_up = payload && hdr->len >= 2 && payload[1] == VK_ACT_UP;
+            if (xQueueReceive(s_q_key, &dump, 0) == pdTRUE) {
+                bool oldest_up = dump.hdr.len >= 2 && dump.payload[1] == VK_ACT_UP;
+                if (oldest_up && !incoming_up) {
+                    (void)xQueueSend(s_q_key, &dump, 0);
+                } else {
+                    (void)xQueueSend(s_q_key, &msg, 0);
+                }
+            }
         }
         return;
     }
@@ -124,10 +151,17 @@ static void handle_key(const uint8_t *payload, uint8_t len)
 
     if (k->key == VK_KEY_VOICE) {
         if (k->action == VK_ACT_DOWN) {
-            /* Re-press while stuck: clear host modifiers first. */
+            uint32_t held_for = now_ms() - s_voice_held_ms;
+            bool release_pending = s_hid_pending && s_want_mod == 0 && s_want_key == 0;
+            /* Already stuck, or the all-zero report still hasn't reached the host:
+             * this press only unlocks. It must not put Ctrl/Cmd back down. */
+            bool stuck = s_voice_held && held_for > 400;
+            if (release_pending || stuck) {
+                force_keys_up("voice key unlock");
+                return;
+            }
             if (s_voice_held) {
-                vk_hid_report_t clear = {0};
-                vk_usb_send_report(&clear);
+                return; /* duplicate DOWN of the press we already applied */
             }
             s_voice_held = true;
             s_voice_held_ms = now_ms();
@@ -143,7 +177,8 @@ static void handle_key(const uint8_t *payload, uint8_t len)
     if (!vk_hid_from_key((vk_key_id_t)k->key, (vk_act_t)k->action, &report)) {
         return;
     }
-    vk_usb_send_report(&report);
+    /* Latch the report. USB may be busy with the mic; app_task retries until the host takes it. */
+    hid_set(report.modifiers, report.keycode);
 }
 
 static void handle_audio(const uint8_t *payload, uint8_t len)
@@ -163,8 +198,15 @@ static void handle_hh_telemetry(const uint8_t *payload, uint8_t len)
     if (!payload || len < 2) {
         return;
     }
-    /* STATUS is 2 bytes; HEARTBEAT starts with battery+flags too. */
+    /* STATUS is 2 bytes; HEARTBEAT starts with battery+flags too.
+     * Handheld only heartbeats while NOT talking (and, after this fix, also while talking
+     * with VK_STAT_TALKING set). A quiet heartbeat after the press means Voice was released
+     * even if the KEY UP packet was lost on the air. */
     vk_usb_hh_update(payload[0], payload[1]);
+    if (s_voice_held && (payload[1] & VK_STAT_TALKING) == 0 &&
+        (now_ms() - s_voice_held_ms) > 300) {
+        force_keys_up("heartbeat says not talking");
+    }
 }
 
 static void handle_msg(const rx_msg_t *msg)
@@ -222,16 +264,18 @@ static void app_task(void *arg)
         uint32_t t = now_ms();
         rx_radio_tick(t);
         vk_usb_hh_tick(t);
+        hid_flush();
 
         /*
          * Voice UP lost while talking: audio stops shortly after handheld releases,
-         * but HID modifiers stay down. If we were live and silence lasts, force UP.
+         * but HID modifiers stay down. Silence, or a long hold with no release, forces UP.
+         * hid_flush keeps retrying the all-zero report until the host accepts it.
          */
         if (s_voice_held) {
             uint32_t silence = t - s_last_voice_audio_ms;
             uint32_t held = t - s_voice_held_ms;
-            if ((silence > 400 && held > 200) || held > 120000) {
-                force_keys_up();
+            if ((silence > 250 && held > 150) || held > 120000) {
+                force_keys_up(silence > 250 ? "audio silence" : "held too long");
             }
         }
 

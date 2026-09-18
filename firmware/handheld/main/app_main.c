@@ -320,7 +320,14 @@ static void handle_events(uint8_t ev)
             vTaskDelay(pdMS_TO_TICKS(2));
         }
         vTaskDelay(pdMS_TO_TICKS(8));
-        send_key(VK_KEY_VOICE, VK_ACT_UP);
+        /* Repeat: ESP-NOW can drop the only UP while audio is still on the air.
+         * Host keeps Right-Ctrl/Right-Cmd down until an all-zero HID report lands. */
+        for (int n = 0; n < 3; n++) {
+            send_key(VK_KEY_VOICE, VK_ACT_UP);
+            if (n + 1 < 3) {
+                vTaskDelay(pdMS_TO_TICKS(6));
+            }
+        }
     }
     if (ev & VK_EV_YES_DOWN) {
         send_key(VK_KEY_YES, VK_ACT_DOWN);
@@ -387,8 +394,9 @@ static void app_task(void *arg)
             }
         }
 
-        /* Heartbeat when we have a peer — but not while talking (avoids audio drops). */
-        if (radio_has_peer() && !s_talking && (t - last_hb) > VK_HB_MS) {
+        /* Heartbeat even while talking, so the receiver can see Voice release
+         * (no VK_STAT_TALKING) if the KEY UP packet was lost. */
+        if (radio_has_peer() && (t - last_hb) > VK_HB_MS) {
             last_hb = t;
             vk_heartbeat_t hb = {
                 .battery = s_bat.percent,
