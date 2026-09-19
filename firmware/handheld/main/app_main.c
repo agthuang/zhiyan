@@ -18,6 +18,7 @@
 #include "nvs_flash.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -76,6 +77,9 @@ static void apply_unix(uint32_t unix_time)
         return;
     }
     bool first = !s_time_ok;
+    time_t cur = time(NULL);
+    bool big_jump = (cur > 0) &&
+                    (llabs((long long)unix_time - (long long)cur) > 120LL);
     s_unix = unix_time;
     s_time_ok = true;
     struct timeval tv = {
@@ -83,12 +87,15 @@ static void apply_unix(uint32_t unix_time)
         .tv_usec = 0,
     };
     settimeofday(&tv, NULL);
-    /* Persist occasionally — every apply from HB would wear NVS; save on first + minute change. */
+    /* Persist on first sync, minute change, or large correction after power loss. */
     static uint32_t s_saved_min;
     uint32_t min = unix_time / 60u;
-    if (first || min != s_saved_min) {
+    if (first || big_jump || min != s_saved_min) {
         s_saved_min = min;
         time_nvs_save(unix_time);
+        if (first || big_jump) {
+            ESP_LOGI(TAG, "time sync %lu", (unsigned long)unix_time);
+        }
     }
 }
 

@@ -111,6 +111,9 @@ static void send_pair_ack(const uint8_t mac[6])
     ack.unix_time = vk_usb_unix_time();
     rx_radio_send(VK_PKT_PAIR_ACK, &ack, sizeof(ack));
     vk_usb_push_backlight();
+    /* Pair ACK already carries unix_time; push a heartbeat too so a missed ACK
+     * still lands the clock, and a later host T sync can refresh the same path. */
+    vk_usb_push_time();
     vk_usb_cdc_printf("paired %02X:%02X:%02X:%02X:%02X:%02X time=%lu\r\n",
                       mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
                       (unsigned long)ack.unix_time);
@@ -247,6 +250,7 @@ static void app_task(void *arg)
 {
     (void)arg;
     uint32_t last_hb = 0;
+    bool hh_was_linked = false;
     rx_msg_t msg;
 
     while (true) {
@@ -265,6 +269,14 @@ static void app_task(void *arg)
         rx_radio_tick(t);
         vk_usb_hh_tick(t);
         hid_flush();
+
+        /* Handheld just came online → push wall clock immediately (pair ACK may have been lost). */
+        bool hh_linked = vk_usb_hh_linked();
+        if (hh_linked && !hh_was_linked) {
+            vk_usb_push_time();
+            ESP_LOGI(TAG, "handheld link-up → push time");
+        }
+        hh_was_linked = hh_linked;
 
         /*
          * Voice UP lost while talking: audio stops shortly after handheld releases,

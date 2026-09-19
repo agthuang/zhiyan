@@ -19,5 +19,7 @@ void vk_usb_push_backlight(void);
 /** Cache handheld telemetry from ESP-NOW heartbeat/status. */
 void vk_usb_hh_update(uint8_t battery, uint8_t flags);
 void vk_usb_hh_tick(uint32_t now_ms);
+/** True while a handheld has spoken recently and a peer is bound. */
+bool vk_usb_hh_linked(void);
 /** Immediately push wall clock to paired handheld via heartbeat. */
 void vk_usb_push_time(void);

@@ -280,22 +280,33 @@ void vk_usb_hh_tick(uint32_t now_ms)
     }
 }
 
+bool vk_usb_hh_linked(void)
+{
+    return s_hh_seen && rx_radio_has_peer();
+}
+
 void vk_usb_push_time(void)
 {
     if (!rx_radio_has_peer()) {
         return;
     }
+    uint32_t now = vk_usb_unix_time();
+    if (!vk_unix_is_valid(now)) {
+        return;
+    }
     vk_heartbeat_t hb = {
-        .battery = 0,
-        .flags = 0,
-        .unix_time = vk_usb_unix_time(),
+        .battery = s_hh_battery,
+        .flags = s_hh_flags,
+        .unix_time = now,
     };
-    rx_radio_send(VK_PKT_HEARTBEAT, &hb, sizeof(hb));
+    if (rx_radio_send(VK_PKT_HEARTBEAT, &hb, sizeof(hb))) {
+        ESP_LOGI(TAG, "push time %lu → handheld", (unsigned long)now);
+    }
 }
 
 static bool hh_linked(void)
 {
-    return s_hh_seen && rx_radio_has_peer();
+    return vk_usb_hh_linked();
 }
 
 static void cdc_print_status(void)

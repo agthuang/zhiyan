@@ -9,9 +9,9 @@ firmware/
   receiver/            # USB 键盘 + 麦 + CDC
 ```
 
-**编译 / 烧录 / 配对 / 校时（Mac + Windows）：** 见 [`docs/flashing.md`](../docs/flashing.md)。  
-仓库总览与 GPIO：根目录 [`README.md`](../README.md)。  
-键位网页：[`web/keymap/README.md`](../web/keymap/README.md)。  
+**编译 / 烧录 / 配对 / 校时（Mac + Windows）：** 见 [`docs/flashing.md`](../docs/flashing.md)。
+仓库总览与 GPIO：根目录 [`README.md`](../README.md)。
+键位网页：[`web/keymap/README.md`](../web/keymap/README.md)。
 AI 推屏：[`aihook/README.md`](../aihook/README.md)。
 
 ---
@@ -21,18 +21,30 @@ AI 推屏：[`aihook/README.md`](../aihook/README.md)。
 ```bash
 cd firmware/components/common/tests
 make test
-# 可选：导出屏预览到 docs/ui-preview/
-make preview
 ```
 
 ---
 
 ## 屏幕
 
-0.96" ST7735，横屏 **160×80**，深色空闲时钟 + 电量，默认背光约 25%。  
+0.96" ST7735，横屏 **160×80**，深色空闲时钟 + 电量，默认背光约 25%。
 偏色/偏移时改 `handheld/main/board.h` 里的 `LCD_X_GAP` / `LCD_Y_GAP` / `LCD_MADCTL`。
 
 接收端控制台默认 **UART0 @ 115200**（不是 OTG 口）；OTG 枚举后 CDC 也会打日志。
+
+---
+
+## 授时
+
+接收端没有电池 RTC：断电后时间会停在 NVS 里的旧值。需要先从电脑授一次时：
+
+```bash
+./tools/set_time.sh                 # 一次
+./tools/set_time.sh --watch         # 插着接收端时自动保持
+```
+
+键位网页连接时也会自动授时。
+手持端连上接收端时（配对 ACK / 重新上线）会自动收下接收端当前时间；电脑给接收端授时后也会立刻推到手持。
 
 ---
 
