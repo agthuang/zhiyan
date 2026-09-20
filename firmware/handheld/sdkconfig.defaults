@@ -1,6 +1,9 @@
-# Vibe Coding Key — handheld (ESP32-S3 N8R2)
+# Vibe Coding Key — handheld (ESP32-S3)
+# Flash size is NOT fixed here — pick a PIO env / overlay:
+#   sdkconfig.flash.4mb  | 8mb | 16mb   (see docs/flashing.md §4.0)
+# Default PIO env "esp32s3" uses 8mb (Controller-RevB N8R2). Upload can also
+# auto-detect via tools/flash_handheld.sh.
 CONFIG_IDF_TARGET="esp32s3"
-CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_FREERTOS_HZ=1000

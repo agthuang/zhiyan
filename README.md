@@ -32,11 +32,11 @@ tools/             # 烧录 / 授时 / 起 keymap 服务等脚本
 
 1. 安装 [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/)（≥ 5.1，建议 5.3+），目标芯片 **ESP32-S3**。  
 2. 按 **[`docs/flashing.md`](docs/flashing.md)** 依次编译烧录：
-   - `firmware/handheld`（手持，Flash **8MB**）
+   - `firmware/handheld`（手持，Flash **4 / 8 / 16MB**，按模组选；`./tools/flash_handheld.sh` 可自动识别）
    - `firmware/receiver`（接收端，Flash **4MB**）  
 3. 接收端插电脑 → 手持正常开机配对 → 对接收端 CDC 授时一次。
 
-摘要（详细步骤与 Windows `COMx` 见烧录文档）：
+手持 Flash 细节见 [`docs/flashing.md`](docs/flashing.md) §4.0。摘要（详细步骤与 Windows `COMx` 见烧录文档）：
 
 ```bash
 . $HOME/esp/esp-idf/export.sh          # Windows：用 ESP-IDF 终端
@@ -78,7 +78,7 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 
 | 项 | 说明 |
 |----|------|
-| 主控 | 两端均为 ESP32-S3；手持模组 N8R2（8MB Flash） |
+| 主控 | 两端均为 ESP32-S3；手持 Flash **4 / 8 / 16MB**（默认配置按 N8R2 的 8MB） |
 | 无线 | ESP-NOW，信道 **1** |
 | 语音 | 16 kHz / 16-bit / mono；按住 Voice 推流（PTT） |
 | 接收端 USB | 键盘 + UAC 麦 + CDC；设备名 Zhiyan Receiver |

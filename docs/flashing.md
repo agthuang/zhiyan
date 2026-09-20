@@ -9,7 +9,7 @@
 
 | 板子 | Flash | 平时连电脑的口 | 烧录时注意 |
 |------|-------|----------------|------------|
-| 手持端 `firmware/handheld` | **8MB**（N8R2） | USB（供电 / 调试，USB-Serial/JTAG） | Voice 键 = **GPIO0 = BOOT**，进下载模式或复位时别误按住 |
+| 手持端 `firmware/handheld` | **4 / 8 / 16MB**（按模组选配置，见 §4.0） | USB（供电 / 调试，USB-Serial/JTAG） | Voice 键 = **GPIO0 = BOOT**，进下载模式或复位时别误按住 |
 | 接收端 `firmware/receiver` | **4MB** | **USB OTG**（枚举成 Zhiyan Receiver） | 调试串口是 **UART0 @ 115200**，不是 OTG 口 |
 
 ---
@@ -137,6 +137,37 @@ ESP32-S3 在能自动复位时，`idf.py flash` 往往能直接刷。失败时�
 ---
 
 ## 4. 编译并烧录手持端
+
+### 4.0 Flash 容量：按模组选 4MB / 8MB / 16MB
+
+手持端模组有多大 Flash 就用对应配置，**不要统一压成 4MB**。程序约 1.2MB，当前分区表落在 4MB 以内，4/8/16MB 模组都能跑；镜像头里的容量应和芯片一致，以后扩展 OTA / 存储时也能用满。
+
+| 模组示例 | Flash | PlatformIO 环境 | sdkconfig 叠加 |
+|----------|-------|-----------------|----------------|
+| N4R8 等 | 4MB | `flash_4mb` | `sdkconfig.flash.4mb` |
+| N8R2（Controller-RevB 默认） | 8MB | `flash_8mb`（也是 `esp32s3`） | `sdkconfig.flash.8mb` |
+| 16MB 模组 | 16MB | `flash_16mb` | `sdkconfig.flash.16mb` |
+
+**推荐烧录（自动认容量）：**
+
+```bash
+./tools/flash_handheld.sh /dev/cu.usbmodemXXXX
+# 或手动指定：./tools/flash_handheld.sh /dev/cu.usbmodemXXXX 8MB
+```
+
+脚本会 `flash_id` 读芯片，再 `pio run -e flash_4mb|flash_8mb|flash_16mb` 并按该容量写入。
+
+**PlatformIO 手动编译：**
+
+```bash
+cd firmware/handheld
+pio run -e flash_8mb          # 或 flash_4mb / flash_16mb
+pio run -e flash_8mb -t upload --upload-port /dev/cu.usbmodemXXXX
+```
+
+**ESP-IDF：** 把对应的 `sdkconfig.flash.*` 内容合并进 `sdkconfig`（或 `sdkconfig.defaults`），`idf.py build` 后再 flash；勿把 16MB/8MB 镜像写到更小的芯片上。
+
+固件不用 PSRAM；八线 PSRAM 占的 IO33–37 这块板没接。
 
 在已 `export` / 已打开 ESP-IDF 终端的前提下：
 
@@ -291,7 +322,7 @@ python3 -m http.server 8766
 
 Windows 上更建议直接用上文的 `idf.py`；若坚持 PlatformIO，在 PIO 终端里对 `firmware/handheld`、`firmware/receiver` 执行 `pio run -t upload`，并自行指定 `upload_port = COMx`。
 
-手持脚本按 **8MB** flash 写；接收端按 **4MB**。勿混用镜像。
+手持脚本会按芯片 **自动选 4/8/16MB**（也可手写容量）；接收端固定 **4MB**。手持 / 接收端镜像勿混用。
 
 ---
 
@@ -330,4 +361,4 @@ idf.py build
 6. 对接收端 CDC 校时 `T<unix>`  
 7. 试 Voice / Yes / No；需要再开 `web/keymap`  
 
-更细的引脚与产品用法见根目录 [`README.md`](../README.md)；固件目录与 CDC 速查见 [`firmware/README.md`](../firmware/README.md)。
+更细的协议、CDC 命令、蓝牙媒体模式见 [`firmware/README.md`](../firmware/README.md) 与根目录 [`README.md`](../README.md)。

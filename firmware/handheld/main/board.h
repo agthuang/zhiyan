@@ -2,7 +2,7 @@
 
 #include "driver/gpio.h"
 
-/* Controller-RevB / ESP32-S3-WROOM-1-N8R2 — README §6 */
+/* Controller-RevB — flash 4/8/16MB via PIO env (docs/flashing.md §4.0). README §6. */
 
 #define PIN_BTN_VOICE   GPIO_NUM_0
 #define PIN_BTN_YES     GPIO_NUM_10
