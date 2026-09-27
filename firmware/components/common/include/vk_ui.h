@@ -24,6 +24,7 @@ typedef struct {
     uint8_t charging; /* actively charging (not full) */
     uint8_t chg_full; /* charge complete */
     uint8_t blink;    /* 0/1 — charging segment pulse */
+    uint8_t anim;     /* phase for idle/away motion (eyes, etc.) */
     uint8_t linked;
     uint8_t time_valid;
     uint8_t hour;

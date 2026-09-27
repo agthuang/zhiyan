@@ -83,7 +83,7 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 | 语音 | 16 kHz / 16-bit / mono；按住 Voice 推流（PTT） |
 | 接收端 USB | 键盘 + UAC 麦 + CDC；设备名 Zhiyan Receiver |
 | 默认可选键 | Voice = Right-⌘+Right-Ctrl；Yes = Enter；No = Backspace（网页可改） |
-| 蓝牙媒体（可选） | **先按住 Yes 再开机** ≥1.5s → 手机搜「知言」；Voice↑ / Yes Space / No↓ |
+| 蓝牙媒体（可选，**Beta**） | **先按住 Yes 再开机** ≥1.5s → 手机搜「知言」；Voice↑ / Yes Space / No↓。鸿蒙可用；苹果/安卓常需自行映射键位 |
 
 共用逻辑在 `firmware/components/common/`（协议、UI、按键、HID 策略），可主机编译单测，见 [`firmware/README.md`](firmware/README.md)。
 
@@ -96,7 +96,7 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 | 功能 | GPIO | 备注 |
 |------|------|------|
 | Voice / PTT | **IO0** | 兼 BOOT |
-| Yes / Accept | **IO10** | 开机长按进蓝牙媒体 |
+| Yes / Accept | **IO10** | 开机长按进蓝牙媒体（Beta） |
 | No / Delete | **IO9** | |
 | I²S BCLK / WS / SD | **IO12 / 14 / 13** | 麦 ICS-43434 |
 | MIC_PWR_EN | **IO11** | 低电平使能 |

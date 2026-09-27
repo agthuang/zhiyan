@@ -28,5 +28,5 @@
 /* 0.96" ST7735 80x160 → landscape 160x80. Tune if the panel is offset. */
 #define LCD_X_GAP 1
 #define LCD_Y_GAP 26
-#define LCD_MADCTL 0x60 /* MV | MX — was 0xA0 (mirrored/upside-down on this panel) */
+#define LCD_MADCTL 0x68 /* MV | MX | BGR — BGR so oranges aren't blue on this ST7735 */
 #define LCD_BL_DUTY 64  /* /255 ≈ 25% — soft, not glaring */

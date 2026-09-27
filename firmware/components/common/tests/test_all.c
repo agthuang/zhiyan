@@ -187,7 +187,8 @@ static void test_ui(const char *preview_dir)
 
         m.mode = VK_UI_AWAY;
         m.linked = 0;
-        m.time_valid = 1;
+        m.time_valid = 0;
+        m.anim = 5; /* eyes open, slight look */
         snprintf(path, sizeof(path), "%s/away.ppm", preview_dir);
         expect(write_preview(path, &m) == 0, "write away");
 

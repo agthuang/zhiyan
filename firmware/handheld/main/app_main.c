@@ -268,6 +268,8 @@ static vk_ui_model_t make_ui(void)
     m.chg_full = s_bat.done && !s_bat.charging;
     m.charging = s_bat.charging && !m.chg_full;
     m.blink = (uint8_t)((now_ms() / 400) & 1u);
+    /* ~10 Hz phase for away-eye look/blink (also busts lcd dirty skip). */
+    m.anim = (uint8_t)((now_ms() / 100) & 0xFFu);
     m.linked = (s_link == APP_LINKED);
     m.time_valid = s_time_ok;
 
@@ -484,6 +486,7 @@ void app_main(void)
         .chg_full = s_bat.done && !s_bat.charging,
         .linked = 0,
         .time_valid = s_time_ok,
+        .anim = 5,
     };
     if (s_time_ok) {
         vk_unix_to_hm(s_unix, s_tz, &boot_ui.hour, &boot_ui.minute);
