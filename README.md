@@ -4,7 +4,16 @@
 
 ![系统组成：手持 — ESP-NOW — 接收端 — USB — 电脑](docs/images/architecture.gif)
 
-工程名曾用 Vibe / VibeKey。本仓库开源的是**软件与烧录说明**；完整 PCB/Gerber 不在此列。
+工程名曾用 Vibe / VibeKey。本仓库开源的是**软件与烧录说明**；完整 PCB/Gerber 见立创开源。
+
+## 相关链接
+
+| | 地址 |
+|--|------|
+| 立创开源（硬件） | https://oshwhub.com/runobj/project_amwzvrns |
+| B 站演示 | https://www.bilibili.com/video/BV1dXat6pEEt |
+| MakerWorld（结构件） | https://makerworld.com.cn/zh/models/3024819-zhi-yan-san-jian-yu-yin-jian-pan#profileId-3554418 |
+| 键位配置网页 | https://agthuang.github.io/zhiyan/ |
 
 ---
 
