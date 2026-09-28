@@ -45,6 +45,8 @@ tools/             # 烧录 / 授时 / 起 keymap 服务等脚本
    - `firmware/receiver`（接收端，Flash **4MB**）  
 3. 接收端插电脑 → 手持正常开机配对 → 对接收端 CDC 授时一次。
 
+接收端若为 **ESP32-S3 SuperMini**：板载 WS2812（GPIO48）作状态灯——蓝闪=未连手持，绿=已连，琥珀=按住 Voice（蓝充电灯不可控）。
+
 手持 Flash 细节见 [`docs/flashing.md`](docs/flashing.md) §4.0。摘要（详细步骤与 Windows `COMx` 见烧录文档）：
 
 ```bash

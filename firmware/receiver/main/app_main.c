@@ -1,5 +1,6 @@
 #include "audio_ring.h"
 #include "radio.h"
+#include "status_led.h"
 #include "usb/vk_usb.h"
 
 #include "vk_hid.h"
@@ -291,6 +292,8 @@ static void app_task(void *arg)
             }
         }
 
+        status_led_tick(t, hh_linked, s_voice_held);
+
         if (rx_radio_has_peer() && (t - last_hb) > VK_HB_MS) {
             last_hb = t;
             vk_heartbeat_t hb = {
@@ -315,6 +318,7 @@ void app_main(void)
 
     s_q = xQueueCreate(24, sizeof(rx_msg_t));
     s_q_key = xQueueCreate(16, sizeof(rx_msg_t));
+    status_led_init();
     vk_usb_init();
     rx_radio_init(on_radio, NULL);
 
