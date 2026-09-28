@@ -114,7 +114,9 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 | BAT_SENSE | **IO3** | ADC，约 1M / 330k 分压 |
 | CHG_DONE_N / CHG_STAT_N | **IO47** / **IO48** | 低有效 |
 
-接收端无手持这套键/麦/屏脚；对电脑走片内 USB OTG。屏偏移可调 `firmware/handheld/main/board.h` 中的 `LCD_*`。
+接收端无手持这套键/麦/屏脚；对电脑走片内 USB OTG。
+
+**屏模组变体：** 不同厂家 80×160 ST7735 的 GRAM 偏移/反色常不一致。改 `firmware/handheld/main/board.h` 里的 `LCD_PANEL_VARIANT`（`0`=原配套 1/26+反色，`1`=常见另一款 0/24+不反色）后重烧。斜切花屏→偏移；发白→反色。同芯片 ID **无法可靠自动区分**，见 [`docs/flashing.md`](docs/flashing.md) 常见问题、[`firmware/README.md`](firmware/README.md)。
 
 ---
 

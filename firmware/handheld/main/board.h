@@ -25,8 +25,24 @@
 #define PIN_CHG_DONE_N  GPIO_NUM_47 /* active low */
 #define PIN_CHG_STAT_N  GPIO_NUM_48 /* active low */
 
-/* 0.96" ST7735 80x160 → landscape 160x80. Tune if the panel is offset. */
+/*
+ * 0.96" ST7735 80x160 → landscape 160x80.
+ * 不同厂家模组 GRAM 窗口偏移 / 是否反色常不一致：
+ *   0 = 现用正常屏（X=1 Y=26 + invert）
+ *   1 = 另一厂家常见款（Adafruit MINI160x80：X=0 Y=24，不反色）
+ * 新屏斜切花屏 / 发白时改 LCD_PANEL_VARIANT 后重烧。
+ */
+#ifndef LCD_PANEL_VARIANT
+#define LCD_PANEL_VARIANT 0
+#endif
+#if LCD_PANEL_VARIANT == 0
 #define LCD_X_GAP 1
 #define LCD_Y_GAP 26
+#define LCD_INVERT 1
+#else
+#define LCD_X_GAP 0
+#define LCD_Y_GAP 24
+#define LCD_INVERT 0
+#endif
 #define LCD_MADCTL 0x68 /* MV | MX | BGR — BGR so oranges aren't blue on this ST7735 */
 #define LCD_BL_DUTY 64  /* /255 ≈ 25% — soft, not glaring */

@@ -169,7 +169,11 @@ void lcd_init(void)
     lcd_data8(LCD_MADCTL);
     lcd_cmd(0x3A);
     lcd_data8(0x05);
-    lcd_cmd(0x21); /* invert — common for IPS mini */
+#if LCD_INVERT
+    lcd_cmd(0x21); /* INVON — some IPS need this; others wash out if set */
+#else
+    lcd_cmd(0x20); /* INVOFF */
+#endif
     lcd_cmd(0x13);
     lcd_cmd(0x29);
     vTaskDelay(pdMS_TO_TICKS(20));

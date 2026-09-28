@@ -30,7 +30,13 @@ make test
 ## 屏幕
 
 0.96" ST7735，横屏 **160×80**，深色空闲时钟 + 电量，默认背光约 25%。  
-偏色/偏移时改 `handheld/main/board.h` 里的 `LCD_X_GAP` / `LCD_Y_GAP` / `LCD_MADCTL`。
+
+不同厂家模组用 `handheld/main/board.h` 的 `LCD_PANEL_VARIANT`：
+
+- `0` — 原配套（`X_GAP=1` `Y_GAP=26`，反色开）
+- `1` — 常见另一款（`0/24`，反色关）
+
+斜切花屏→改偏移；发白→改反色。仍不正再调 `LCD_X_GAP` / `LCD_Y_GAP` / `LCD_MADCTL`。芯片 ID 无法可靠自动判断贴装差异。
 
 接收端控制台默认 **UART0 @ 115200**（不是 OTG 口）；OTG 枚举后 CDC 也会打日志。
 
