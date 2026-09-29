@@ -241,7 +241,7 @@ static void draw_colon(uint16_t *fb, int x, int y, int cell, uint16_t c)
 
 #include "vk_pup_sprite.inc"
 
-/** Waiting pet (GIF frames) for unlinked / no host clock. ~2 fps via anim. */
+/** Waiting pet for no host clock yet (not for brief link drops). */
 static void draw_wait_pup(uint16_t *fb, uint8_t anim)
 {
     int frame = (int)(anim % VK_PUP_FRAMES);
@@ -463,8 +463,13 @@ void vk_ui_render(uint16_t *fb, const vk_ui_model_t *m)
         draw_text_centered(fb, 30, "no", 3, 4, COL_NO);
         break;
     case VK_UI_AWAY:
-        /* Unlinked / waiting for link — same pet as unsynced clock. */
-        draw_wait_pup(fb, m->anim);
+        /* Brief RF drop must not flash the wait-pet over a good clock. */
+        if (m->time_valid) {
+            draw_clock(fb, m->hour, m->minute, 1);
+            draw_text_centered(fb, 64, "away", 1, 1, COL_MUTED);
+        } else {
+            draw_wait_pup(fb, m->anim);
+        }
         break;
     case VK_UI_MEDIA:
         draw_text_centered(fb, 30, "bt", 3, 4, m->linked ? COL_SAGE : COL_WARM);

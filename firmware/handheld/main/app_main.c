@@ -278,6 +278,12 @@ static void on_radio(const uint8_t mac[6], const vk_hdr_t *hdr, const uint8_t *p
 
     if (hdr->type == VK_PKT_IDLE_BLANK && payload && hdr->len >= sizeof(vk_idle_blank_t)) {
         const vk_idle_blank_t *cfg = (const vk_idle_blank_t *)payload;
+        if (s_eco_radio && cfg->enabled == 0) {
+            /* Remember preference; eco still forces blank until eco turns off. */
+            idle_nvs_save(false);
+            ESP_LOGI(TAG, "idle blank off saved (eco keeps blank on)");
+            return;
+        }
         apply_idle_blank(cfg->enabled != 0);
         if (cfg->timeout_sec != 0) {
             s_idle.timeout_ms = (uint32_t)cfg->timeout_sec * 1000u;
@@ -352,8 +358,8 @@ static vk_ui_model_t make_ui(void)
         m.mode = VK_UI_IDLE;
     }
 
-    /* Animate only moving screens — ~2 fps so SPI stays quiet. */
-    if (m.mode == VK_UI_AWAY || (m.mode == VK_UI_IDLE && !m.time_valid)) {
+    /* Animate wait-pet only when there is no wall clock yet. */
+    if ((m.mode == VK_UI_AWAY || m.mode == VK_UI_IDLE) && !m.time_valid) {
         m.anim = (uint8_t)((now_ms() / 500) & 0xFFu);
     }
     return m;

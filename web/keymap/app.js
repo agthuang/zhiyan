@@ -382,8 +382,8 @@ function paintLcd() {
   if (!ctx) return;
   const pairing = lcdMode === "pair";
   const { hour, minute, valid } = lcdNowHM();
-  const showWait = lcdMode === "away" || (lcdMode === "idle" && !valid);
-
+  /* Wait-pup only when there is no wall clock yet. */
+  const showWait = (lcdMode === "idle" || lcdMode === "away") && !valid;
   if (showWait) {
     lcdWaitPup(ctx);
     return;
@@ -408,6 +408,10 @@ function paintLcd() {
       break;
     case "no":
       lcdTextCentered(ctx, 30, "no", 3, 4, LCD.NO);
+      break;
+    case "away":
+      lcdClock(ctx, hour, minute, valid);
+      lcdTextCentered(ctx, 64, "away", 1, 1, LCD.MUTED);
       break;
     default:
       lcdClock(ctx, hour, minute, valid);
@@ -678,10 +682,24 @@ function setConnected(on) {
   if (idleEl) idleEl.disabled = !on;
   const ecoEl = $("ecoRadio");
   if (ecoEl) ecoEl.disabled = !on;
+  syncEcoIdleUi();
   if (!on) {
     lcdLinked = false;
     if (!lcdFlashTimer) lcdMode = "idle";
     paintLcd();
+  }
+}
+
+/** Eco forces idle blank on device — lock the checkbox while eco is on. */
+function syncEcoIdleUi() {
+  const idleEl = $("idleBlank");
+  const ecoEl = $("ecoRadio");
+  if (!idleEl || !ecoEl) return;
+  if (ecoEl.checked && writer) {
+    idleEl.checked = true;
+    idleEl.disabled = true;
+  } else if (writer) {
+    idleEl.disabled = false;
   }
 }
 
@@ -873,6 +891,7 @@ async function loadEcoRadio() {
   }
   el.checked = on;
   log(on ? "射频省电：开" : "射频省电：关");
+  syncEcoIdleUi();
 }
 
 async function sendEcoRadio(on) {
@@ -892,6 +911,7 @@ async function sendEcoRadio(on) {
   if (el && reported != null) el.checked = reported;
   const note = line && line.includes("no peer") ? "（手持未连接，已记在接收端）" : "";
   log(`射频省电：${(el && el.checked) || on ? "开" : "关"}${note}`);
+  syncEcoIdleUi();
 }
 
 async function sendBacklight(duty) {

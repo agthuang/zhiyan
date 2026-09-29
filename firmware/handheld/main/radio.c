@@ -178,10 +178,11 @@ void radio_modem_boost(void)
         return;
     }
     /* Keep RF up for Voice TX; ignore listen-window sleeping. */
-    (void)esp_now_set_wake_window(65535);
-    if (esp_wifi_force_wakeup_acquire() == ESP_OK) {
-        s_boosted = true;
+    if (esp_wifi_force_wakeup_acquire() != ESP_OK) {
+        return;
     }
+    (void)esp_now_set_wake_window(65535);
+    s_boosted = true;
 }
 
 void radio_modem_unboost(void)
