@@ -25,6 +25,13 @@ static uint16_t s_seq;
 static SemaphoreHandle_t s_tx_sem;
 static volatile bool s_tx_busy;
 
+static bool s_modem_sleep;
+static bool s_boosted;
+
+/* ESP-NOW connectionless PS (no AP). Needs CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE. */
+#define ECO_WAKE_INTERVAL_MS 400
+#define ECO_WAKE_WINDOW_MS   160
+
 static void wifi_init_sta(void)
 {
     ESP_ERROR_CHECK(esp_netif_init());
@@ -36,6 +43,7 @@ static void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_channel(VK_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    /* Default always-on RF; eco uses connectionless wake window after esp_now_init. */
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 }
 
@@ -134,6 +142,56 @@ void radio_init(radio_rx_cb_t cb, void *ctx)
     } else {
         ESP_LOGI(TAG, "no peer — will pair");
     }
+}
+
+void radio_set_modem_sleep(bool enable)
+{
+    s_modem_sleep = enable;
+    if (s_boosted) {
+        (void)esp_wifi_force_wakeup_release();
+        s_boosted = false;
+    }
+    if (enable) {
+        /*
+         * Pure ESP-NOW (no AP): WIFI_PS_MIN_MODEM alone does almost nothing.
+         * Connectionless wake interval + ESP-NOW window is the real saver
+         * (needs CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE — already on).
+         */
+        (void)esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+        esp_err_t e1 = esp_wifi_connectionless_module_set_wake_interval(ECO_WAKE_INTERVAL_MS);
+        esp_err_t e2 = esp_now_set_wake_window(ECO_WAKE_WINDOW_MS);
+        ESP_LOGI(TAG, "espnow eco PS interval=%ums window=%ums (%s/%s)",
+                 (unsigned)ECO_WAKE_INTERVAL_MS, (unsigned)ECO_WAKE_WINDOW_MS,
+                 esp_err_to_name(e1), esp_err_to_name(e2));
+    } else {
+        (void)esp_wifi_connectionless_module_set_wake_interval(
+            ESP_WIFI_CONNECTIONLESS_INTERVAL_DEFAULT_MODE);
+        (void)esp_now_set_wake_window(65535);
+        (void)esp_wifi_set_ps(WIFI_PS_NONE);
+        ESP_LOGI(TAG, "espnow PS off (always RX)");
+    }
+}
+
+void radio_modem_boost(void)
+{
+    if (!s_modem_sleep || s_boosted) {
+        return;
+    }
+    /* Keep RF up for Voice TX; ignore listen-window sleeping. */
+    (void)esp_now_set_wake_window(65535);
+    if (esp_wifi_force_wakeup_acquire() == ESP_OK) {
+        s_boosted = true;
+    }
+}
+
+void radio_modem_unboost(void)
+{
+    if (!s_modem_sleep || !s_boosted) {
+        return;
+    }
+    (void)esp_wifi_force_wakeup_release();
+    (void)esp_now_set_wake_window(ECO_WAKE_WINDOW_MS);
+    s_boosted = false;
 }
 
 bool radio_has_peer(void)

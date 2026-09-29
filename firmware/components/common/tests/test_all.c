@@ -59,6 +59,12 @@ static void test_protocol(void)
     expect(n == VK_HDR_SIZE + sizeof(osd), "osd pack");
     expect(vk_parse(buf, n, &hdr, &payload), "osd parse");
     expect(hdr.type == VK_PKT_OSD, "osd type");
+
+    vk_eco_t eco = {.enabled = 1};
+    n = vk_pack(buf, sizeof(buf), VK_PKT_ECO, 3, &eco, sizeof(eco));
+    expect(n == VK_HDR_SIZE + sizeof(eco), "eco pack");
+    expect(vk_parse(buf, n, &hdr, &payload), "eco parse");
+    expect(hdr.type == VK_PKT_ECO && payload && payload[0] == 1, "eco enabled");
 }
 
 static void test_battery(void)
@@ -157,6 +163,18 @@ static void test_ui(const char *preview_dir)
     }
     expect(found > 80, "idle has foreground pixels");
 
+    m.time_valid = 0;
+    m.anim = 6;
+    vk_ui_render(fb, &m);
+    found = 0;
+    for (int i = 0; i < VK_LCD_W * VK_LCD_H; i++) {
+        if (fb[i] != bg) {
+            found++;
+        }
+    }
+    expect(found > 80, "wait pup has foreground pixels");
+    m.time_valid = 1;
+
     if (preview_dir) {
         char path[256];
         /* Same battery on every frame so docs look consistent. */
@@ -166,6 +184,12 @@ static void test_ui(const char *preview_dir)
 
         snprintf(path, sizeof(path), "%s/idle.ppm", preview_dir);
         expect(write_preview(path, &m) == 0, "write idle");
+
+        m.time_valid = 0;
+        m.anim = 6;
+        snprintf(path, sizeof(path), "%s/wait.ppm", preview_dir);
+        expect(write_preview(path, &m) == 0, "write wait");
+        m.time_valid = 1;
 
         m.mode = VK_UI_TALK;
         snprintf(path, sizeof(path), "%s/talk.ppm", preview_dir);

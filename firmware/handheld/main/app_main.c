@@ -19,6 +19,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -43,6 +44,12 @@ static bool s_osd_on;
 static uint16_t s_osd_color;
 static char s_osd_text[VK_OSD_TEXT_MAX + 1];
 static vk_idle_t s_idle;
+static bool s_eco_radio; /* NVS / web: ESP-NOW connectionless RF eco */
+
+/* Eco idle heartbeat: stay under receiver VK_HB_TIMEOUT_MS (1600). */
+#define VK_HB_MS_ECO       900
+#define VK_HB_TIMEOUT_ECO  2800
+#define VK_ECO_IDLE_BLANK_MS 10000
 
 static uint32_t now_ms(void)
 {
@@ -58,17 +65,6 @@ static void time_nvs_save(uint32_t unix_time)
     nvs_set_u32(h, "unix", unix_time);
     nvs_commit(h);
     nvs_close(h);
-}
-
-static bool time_nvs_load(uint32_t *out)
-{
-    nvs_handle_t h;
-    if (nvs_open("vk", NVS_READONLY, &h) != ESP_OK) {
-        return false;
-    }
-    esp_err_t err = nvs_get_u32(h, "unix", out);
-    nvs_close(h);
-    return err == ESP_OK && vk_unix_is_valid(*out);
 }
 
 static void apply_unix(uint32_t unix_time)
@@ -136,11 +132,40 @@ static void idle_nvs_save(bool enabled)
 static bool idle_nvs_load(void)
 {
     nvs_handle_t h;
-    uint8_t v = 0;
+    uint8_t v = 1; /* default: idle blank on (save backlight) */
+    if (nvs_open("vk", NVS_READONLY, &h) != ESP_OK) {
+        return true;
+    }
+    if (nvs_get_u8(h, "idle", &v) != ESP_OK) {
+        nvs_close(h);
+        return true;
+    }
+    nvs_close(h);
+    return v != 0;
+}
+
+static void eco_nvs_save(bool enabled)
+{
+    nvs_handle_t h;
+    if (nvs_open("vk", NVS_READWRITE, &h) != ESP_OK) {
+        return;
+    }
+    nvs_set_u8(h, "eco", enabled ? 1u : 0u);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+static bool eco_nvs_load(void)
+{
+    nvs_handle_t h;
+    uint8_t v = 0; /* default: RF always on */
     if (nvs_open("vk", NVS_READONLY, &h) != ESP_OK) {
         return false;
     }
-    nvs_get_u8(h, "idle", &v);
+    if (nvs_get_u8(h, "eco", &v) != ESP_OK) {
+        nvs_close(h);
+        return false;
+    }
     nvs_close(h);
     return v != 0;
 }
@@ -172,6 +197,27 @@ static void apply_idle_blank(bool enabled)
         lcd_set_backlight(bl_nvs_load());
     }
     ESP_LOGI(TAG, "idle blank %s", enabled ? "on" : "off");
+}
+
+static void apply_eco_radio(bool enabled)
+{
+    eco_nvs_save(enabled);
+    s_eco_radio = enabled;
+    radio_set_modem_sleep(enabled);
+    if (enabled) {
+        /* Force blank on for battery; leave user's idle NVS preference alone. */
+        vk_idle_set_enabled(&s_idle, true, now_ms());
+        s_idle.timeout_ms = VK_ECO_IDLE_BLANK_MS;
+        ESP_LOGI(TAG, "eco radio on");
+    } else {
+        bool idle_on = idle_nvs_load();
+        vk_idle_set_enabled(&s_idle, idle_on, now_ms());
+        s_idle.timeout_ms = VK_IDLE_BLANK_MS_DEFAULT;
+        if (!idle_on || !vk_idle_is_blanked(&s_idle)) {
+            lcd_set_backlight(bl_nvs_load());
+        }
+        ESP_LOGI(TAG, "eco radio off");
+    }
 }
 
 static void send_key(vk_key_id_t key, vk_act_t act)
@@ -235,7 +281,15 @@ static void on_radio(const uint8_t mac[6], const vk_hdr_t *hdr, const uint8_t *p
         apply_idle_blank(cfg->enabled != 0);
         if (cfg->timeout_sec != 0) {
             s_idle.timeout_ms = (uint32_t)cfg->timeout_sec * 1000u;
+        } else if (s_eco_radio) {
+            s_idle.timeout_ms = VK_ECO_IDLE_BLANK_MS;
         }
+        return;
+    }
+
+    if (hdr->type == VK_PKT_ECO && payload && hdr->len >= sizeof(vk_eco_t)) {
+        const vk_eco_t *cfg = (const vk_eco_t *)payload;
+        apply_eco_radio(cfg->enabled != 0);
         return;
     }
 
@@ -267,9 +321,8 @@ static vk_ui_model_t make_ui(void)
     m.battery = s_bat.percent;
     m.chg_full = s_bat.done && !s_bat.charging;
     m.charging = s_bat.charging && !m.chg_full;
-    m.blink = (uint8_t)((now_ms() / 400) & 1u);
-    /* ~10 Hz phase for away-eye look/blink (also busts lcd dirty skip). */
-    m.anim = (uint8_t)((now_ms() / 100) & 0xFFu);
+    /* Only pulse while charging — otherwise dirty-check flushes LCD ~2.5 Hz forever. */
+    m.blink = m.charging ? (uint8_t)((now_ms() / 400) & 1u) : 0;
     m.linked = (s_link == APP_LINKED);
     m.time_valid = s_time_ok;
 
@@ -298,6 +351,11 @@ static vk_ui_model_t make_ui(void)
     } else {
         m.mode = VK_UI_IDLE;
     }
+
+    /* Animate only moving screens — ~2 fps so SPI stays quiet. */
+    if (m.mode == VK_UI_AWAY || (m.mode == VK_UI_IDLE && !m.time_valid)) {
+        m.anim = (uint8_t)((now_ms() / 500) & 0xFFu);
+    }
     return m;
 }
 
@@ -318,6 +376,7 @@ static void handle_events(uint8_t ev)
     }
     if (ev & VK_EV_VOICE_DOWN) {
         s_talking = true;
+        radio_modem_boost();
         mic_set_streaming(true);
         send_key(VK_KEY_VOICE, VK_ACT_DOWN);
     }
@@ -337,6 +396,7 @@ static void handle_events(uint8_t ev)
                 vTaskDelay(pdMS_TO_TICKS(6));
             }
         }
+        radio_modem_unboost();
     }
     if (ev & VK_EV_YES_DOWN) {
         send_key(VK_KEY_YES, VK_ACT_DOWN);
@@ -389,13 +449,15 @@ static void app_task(void *arg)
             }
         }
 
-        if (s_link == APP_LINKED && s_last_rx_ms && (t - s_last_rx_ms) > VK_HB_TIMEOUT_MS) {
+        if (s_link == APP_LINKED && s_last_rx_ms &&
+            (t - s_last_rx_ms) > (s_eco_radio ? VK_HB_TIMEOUT_ECO : VK_HB_TIMEOUT_MS)) {
             s_link = APP_AWAY;
             ESP_LOGW(TAG, "link timeout");
         }
 
         /* Keep probing until linked — avoids AWAY+saved-peer deadlock. */
-        if (s_link != APP_LINKED && (t - last_pair) > 800) {
+        uint32_t pair_gap = s_eco_radio ? 1500u : 800u;
+        if (s_link != APP_LINKED && (t - last_pair) > pair_gap) {
             last_pair = t;
             radio_send_pair_req();
             if (!radio_has_peer()) {
@@ -405,7 +467,11 @@ static void app_task(void *arg)
 
         /* Heartbeat even while talking, so the receiver can see Voice release
          * (no VK_STAT_TALKING) if the KEY UP packet was lost. */
-        if (radio_has_peer() && (t - last_hb) > VK_HB_MS) {
+        uint32_t hb_ms = VK_HB_MS;
+        if (s_eco_radio && !s_talking) {
+            hb_ms = VK_HB_MS_ECO;
+        }
+        if (radio_has_peer() && (t - last_hb) > hb_ms) {
             last_hb = t;
             vk_heartbeat_t hb = {
                 .battery = s_bat.percent,
@@ -429,9 +495,12 @@ static void app_task(void *arg)
             s_bat = battery_hw_read();
         }
 
-        vk_ui_model_t ui = make_ui();
-        lcd_show(&ui);
-        vTaskDelay(pdMS_TO_TICKS(20));
+        /* Backlight off: skip SPI redraw (panel still holds last frame). */
+        if (!vk_idle_is_blanked(&s_idle)) {
+            vk_ui_model_t ui = make_ui();
+            lcd_show(&ui);
+        }
+        vTaskDelay(pdMS_TO_TICKS(vk_idle_is_blanked(&s_idle) ? 100 : 20));
     }
 }
 
@@ -457,8 +526,9 @@ void app_main(void)
     }
 
     /*
-     * BLE media: hold Yes while flipping power (key already down at boot).
-     * No BT splash on normal boot — bail out quickly if Yes isn't held.
+     * Boot gesture (key already held while flipping power):
+     *   Yes ≥1.5s → BLE media
+     * RF eco is web/NVS only (CDC E); no boot-hold No.
      */
     if (ble_media_boot_hold_yes(1500)) {
         ESP_LOGI(TAG, "boot: BLE media mode (Yes held at power-on)");
@@ -466,13 +536,13 @@ void app_main(void)
     }
 
     radio_init(on_radio, NULL);
+    if (eco_nvs_load()) {
+        apply_eco_radio(true);
+    }
     mic_init(on_mic_frame, NULL);
 
-    uint32_t saved = 0;
-    if (time_nvs_load(&saved)) {
-        apply_unix(saved);
-        ESP_LOGI(TAG, "restored time %lu", (unsigned long)saved);
-    }
+    /* Do not restore NVS as a wall clock — it freezes at last unplug.
+     * Idle shows the wait-pet until the receiver pushes a host T. */
 
     if (radio_has_peer()) {
         s_link = APP_AWAY; /* wait for receiver heartbeat / re-pair */
@@ -480,19 +550,27 @@ void app_main(void)
     }
 
     vk_ui_model_t boot_ui = {
-        .mode = radio_has_peer() ? VK_UI_AWAY : VK_UI_PAIR,
+        .mode = VK_UI_OSD,
         .battery = s_bat.percent,
         .charging = s_bat.charging && !s_bat.done,
         .chg_full = s_bat.done && !s_bat.charging,
         .linked = 0,
-        .time_valid = s_time_ok,
+        .time_valid = 0,
         .anim = 5,
+        .osd_color = s_eco_radio ? vk_rgb888_to_565(0x60, 0xC4, 0x84)
+                                 : vk_rgb888_to_565(0xEC, 0xB0, 0x48),
     };
-    if (s_time_ok) {
-        vk_unix_to_hm(s_unix, s_tz, &boot_ui.hour, &boot_ui.minute);
+    if (s_eco_radio) {
+        snprintf(boot_ui.osd_text, sizeof(boot_ui.osd_text), "ECO");
+    } else if (radio_has_peer()) {
+        boot_ui.mode = VK_UI_AWAY;
+        boot_ui.osd_text[0] = 0;
+    } else {
+        boot_ui.mode = VK_UI_PAIR;
+        boot_ui.osd_text[0] = 0;
     }
     lcd_show(&boot_ui);
 
     xTaskCreate(app_task, "app", 6144, NULL, 5, NULL);
-    ESP_LOGI(TAG, "handheld ready");
+    ESP_LOGI(TAG, "handheld ready%s", s_eco_radio ? " (eco)" : "");
 }

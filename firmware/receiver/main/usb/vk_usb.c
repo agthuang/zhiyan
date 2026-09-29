@@ -27,8 +27,10 @@ static const char *TAG = "usb";
 static usb_phy_handle_t s_phy;
 static SemaphoreHandle_t s_hid_mu;
 static uint32_t s_unix;
+static bool s_time_from_host; /* CDC T this USB session — NVS restore is not wall clock */
 static uint8_t s_bl_duty = VK_BL_DEFAULT;
-static uint8_t s_idle_blank; /* 0/1 — persist + push to handheld */
+static uint8_t s_idle_blank = 1; /* default on — opt out via CDC I 0 / keymap */
+static uint8_t s_eco_radio; /* default off — opt in via CDC E 1 / keymap */
 static uint8_t s_hh_battery;
 static uint8_t s_hh_flags;
 static uint32_t s_hh_last_ms;
@@ -131,6 +133,68 @@ static void parse_idle_cmd(char *rest)
     bool sent = idle_send(s_idle_blank);
     vk_usb_cdc_printf("I ok%s\r\n", sent ? "" : " (no peer)");
     vk_usb_cdc_printf("I=%u\r\n", (unsigned)s_idle_blank);
+}
+
+static void eco_nvs_save(uint8_t enabled)
+{
+    nvs_handle_t h;
+    if (nvs_open("vk", NVS_READWRITE, &h) != ESP_OK) {
+        return;
+    }
+    nvs_set_u8(h, "eco", enabled ? 1u : 0u);
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+static void eco_nvs_load(void)
+{
+    nvs_handle_t h;
+    if (nvs_open("vk", NVS_READONLY, &h) != ESP_OK) {
+        return;
+    }
+    uint8_t v = 0;
+    if (nvs_get_u8(h, "eco", &v) == ESP_OK) {
+        s_eco_radio = v ? 1u : 0u;
+    }
+    nvs_close(h);
+}
+
+static bool eco_send(uint8_t enabled)
+{
+    vk_eco_t cfg = {
+        .enabled = enabled ? 1u : 0u,
+    };
+    return rx_radio_send(VK_PKT_ECO, &cfg, sizeof(cfg));
+}
+
+static void parse_eco_cmd(char *rest)
+{
+    while (*rest == ' ' || *rest == '\t' || *rest == '=') {
+        rest++;
+    }
+    if (*rest == '?' || *rest == 0) {
+        vk_usb_cdc_printf("E=%u\r\n", (unsigned)s_eco_radio);
+        return;
+    }
+    int on = -1;
+    if (*rest == '1' || *rest == 'y' || *rest == 'Y') {
+        on = 1;
+    } else if (*rest == '0' || *rest == 'n' || *rest == 'N') {
+        on = 0;
+    } else if (strncmp(rest, "on", 2) == 0) {
+        on = 1;
+    } else if (strncmp(rest, "off", 3) == 0) {
+        on = 0;
+    }
+    if (on < 0) {
+        vk_usb_cdc_printf("E? | E 0|1 | E on|off\r\n");
+        return;
+    }
+    s_eco_radio = (uint8_t)on;
+    eco_nvs_save(s_eco_radio);
+    bool sent = eco_send(s_eco_radio);
+    vk_usb_cdc_printf("E ok%s\r\n", sent ? "" : " (no peer)");
+    vk_usb_cdc_printf("E=%u\r\n", (unsigned)s_eco_radio);
 }
 
 static bool osd_send(const vk_osd_t *osd)
@@ -240,6 +304,7 @@ void vk_usb_set_unix_time(uint32_t unix_time)
         return;
     }
     s_unix = unix_time;
+    s_time_from_host = true;
     struct timeval tv = {.tv_sec = (time_t)unix_time, .tv_usec = 0};
     settimeofday(&tv, NULL);
     time_nvs_save(unix_time);
@@ -247,6 +312,9 @@ void vk_usb_set_unix_time(uint32_t unix_time)
 
 uint32_t vk_usb_unix_time(void)
 {
+    if (!s_time_from_host) {
+        return 0;
+    }
     time_t now = time(NULL);
     if (now > 0 && vk_unix_is_valid((uint32_t)now)) {
         return (uint32_t)now;
@@ -260,6 +328,22 @@ void vk_usb_push_backlight(void)
         return;
     }
     bl_send(s_bl_duty);
+}
+
+void vk_usb_push_idle(void)
+{
+    if (!rx_radio_has_peer()) {
+        return;
+    }
+    (void)idle_send(s_idle_blank);
+}
+
+void vk_usb_push_eco(void)
+{
+    if (!rx_radio_has_peer()) {
+        return;
+    }
+    (void)eco_send(s_eco_radio);
 }
 
 void vk_usb_hh_update(uint8_t battery, uint8_t flags)
@@ -546,6 +630,10 @@ static void parse_cdc_line(char *line)
         parse_idle_cmd(line + 1);
         return;
     }
+    if (line[0] == 'E' || line[0] == 'e') {
+        parse_eco_cmd(line + 1);
+        return;
+    }
     if (line[0] == 'O' || line[0] == 'o') {
         parse_osd_cmd(line + 1);
         return;
@@ -768,10 +856,8 @@ void vk_usb_init(void)
 
     uint32_t saved = 0;
     if (time_nvs_load(&saved)) {
-        s_unix = saved;
-        struct timeval tv = {.tv_sec = (time_t)saved, .tv_usec = 0};
-        settimeofday(&tv, NULL);
-        ESP_LOGI(TAG, "restored time %lu", (unsigned long)saved);
+        /* Keep last T for logs only — do not treat as host time until CDC T. */
+        ESP_LOGI(TAG, "nvs time %lu (wait for host T)", (unsigned long)saved);
     }
 
     vk_hid_map_t kmap;
@@ -784,7 +870,9 @@ void vk_usb_init(void)
 
     bl_nvs_load();
     idle_nvs_load();
-    ESP_LOGI(TAG, "backlight duty %u idle_blank %u", (unsigned)s_bl_duty, (unsigned)s_idle_blank);
+    eco_nvs_load();
+    ESP_LOGI(TAG, "backlight duty %u idle_blank %u eco %u",
+             (unsigned)s_bl_duty, (unsigned)s_idle_blank, (unsigned)s_eco_radio);
 
     if (!tusb_init()) {
         ESP_LOGE(TAG, "tusb_init failed");

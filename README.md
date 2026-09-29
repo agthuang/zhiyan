@@ -71,15 +71,15 @@ idf.py -p /dev/cu.usbmodemXXXX flash
 ## 烧录后怎么确认
 
 1. 系统出现 **Zhiyan Receiver**（键盘 + 麦克风；VID `0x303A` / PID `0x1003`）。  
-2. 手持屏：`pair` → 配对成功后为空闲时钟。  
-3. 授时（接收端 CDC，Mac 示例）：
+2. 手持屏：`pair` → 配对成功；**未授时**时空闲为跑动小狗，授时后才显示时钟。  
+3. 授时（接收端 CDC，Mac 示例；键位网页连接时也会自动授时）：
 
 ```bash
 printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 ```
 
 4. 按住 **Voice** 有麦；点 **Yes** / **No** 默认为 Enter / Backspace。  
-5. 改快捷键：`cd web/keymap && python3 -m http.server 8766`，用 Chrome/Edge 打开 localhost 连接接收端。
+5. 改快捷键 / 闲置息屏 / 射频省电：`cd web/keymap && python3 -m http.server 8766`，用 Chrome/Edge 打开 localhost 连接接收端。
 
 更多配对锁定、`P!` / Yes+No 清配对、故障排查 → [`docs/flashing.md`](docs/flashing.md)。
 
@@ -95,6 +95,7 @@ printf 'T%s\n' "$(date +%s)" > /dev/cu.usbmodemXXXX
 | 接收端 USB | 键盘 + UAC 麦 + CDC；设备名 Zhiyan Receiver |
 | 默认可选键 | Voice = Right-⌘+Right-Ctrl；Yes = Enter；No = Backspace（网页可改） |
 | 蓝牙媒体（可选，**Beta**） | **先按住 Yes 再开机** ≥1.5s → 手机搜「知言」；Voice↑ / Yes Space / No↓。鸿蒙可用；苹果/安卓常需自行映射键位 |
+| 闲置息屏 / 射频省电 | 键位网页开关；息屏约 20s 关背光；射频省电为 ESP-NOW 间歇收听（CDC `I` / `E`） |
 
 共用逻辑在 `firmware/components/common/`（协议、UI、按键、HID 策略），可主机编译单测，见 [`firmware/README.md`](firmware/README.md)。
 

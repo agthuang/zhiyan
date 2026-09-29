@@ -239,35 +239,25 @@ static void draw_colon(uint16_t *fb, int x, int y, int cell, uint16_t c)
     fill_rect(fb, x, y + cell * 3, s, s, c);
 }
 
-#include "vk_cat_sprite.inc"
+#include "vk_pup_sprite.inc"
 
-/**
- * Cute loaf cat sprite for unlinked/away.
- * anim: gentle bob + blink so lcd dirty-check refreshes.
- */
-static void draw_away_cat(uint16_t *fb, uint8_t anim)
+/** Waiting pet (GIF frames) for unlinked / no host clock. ~2 fps via anim. */
+static void draw_wait_pup(uint16_t *fb, uint8_t anim)
 {
-    int bob = ((anim / 10) % 2);
-    int ox = (VK_LCD_W - VK_CAT_W) / 2;
-    int oy = 11 + bob;
-    int blink = ((anim % 36) >= 32);
+    int frame = (int)(anim % VK_PUP_FRAMES);
+    int ox = (VK_LCD_W - VK_PUP_W) / 2;
+    int oy = 12;
+    const uint8_t *pix = vk_pup_pix[frame];
 
-    for (int y = 0; y < VK_CAT_H; y++) {
-        for (int x = 0; x < VK_CAT_W; x++) {
-            unsigned i = (unsigned)y * VK_CAT_W + (unsigned)x;
-            uint8_t byte = vk_cat_pix[i / 2];
+    for (int y = 0; y < VK_PUP_H; y++) {
+        for (int x = 0; x < VK_PUP_W; x++) {
+            unsigned i = (unsigned)y * VK_PUP_W + (unsigned)x;
+            uint8_t byte = pix[i / 2];
             uint8_t idx = (i & 1u) ? (byte & 0x0Fu) : (byte >> 4);
-            if (idx != 0 && idx < VK_CAT_NCOL) {
-                put(fb, ox + x, oy + y, vk_cat_pal[idx]);
+            if (idx != 0 && idx < VK_PUP_NCOL) {
+                put(fb, ox + x, oy + y, vk_pup_pal[idx]);
             }
         }
-    }
-
-    if (blink) {
-        /* Soft lids — eye centers on the 70x58 loaf sprite. */
-        const uint16_t lid = vk_cat_pal[4]; /* cream */
-        fill_rect(fb, ox + 22, oy + 20, 10, 3, lid);
-        fill_rect(fb, ox + 40, oy + 20, 10, 3, lid);
     }
 }
 
@@ -473,8 +463,8 @@ void vk_ui_render(uint16_t *fb, const vk_ui_model_t *m)
         draw_text_centered(fb, 30, "no", 3, 4, COL_NO);
         break;
     case VK_UI_AWAY:
-        /* No clock while unlinked — time drifts; show waiting cat pet. */
-        draw_away_cat(fb, m->anim);
+        /* Unlinked / waiting for link — same pet as unsynced clock. */
+        draw_wait_pup(fb, m->anim);
         break;
     case VK_UI_MEDIA:
         draw_text_centered(fb, 30, "bt", 3, 4, m->linked ? COL_SAGE : COL_WARM);
@@ -494,7 +484,11 @@ void vk_ui_render(uint16_t *fb, const vk_ui_model_t *m)
     }
     case VK_UI_IDLE:
     default:
-        draw_clock(fb, m->hour, m->minute, m->time_valid);
+        if (m->time_valid) {
+            draw_clock(fb, m->hour, m->minute, 1);
+        } else {
+            draw_wait_pup(fb, m->anim);
+        }
         break;
     }
 }

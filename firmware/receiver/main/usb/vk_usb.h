@@ -16,6 +16,10 @@ uint32_t vk_usb_unix_time(void);
 void vk_usb_set_unix_time(uint32_t unix_time);
 /** Re-send last backlight duty to the paired handheld (no-op if unpaired). */
 void vk_usb_push_backlight(void);
+/** Re-send idle-blank flag to the paired handheld (no-op if unpaired). */
+void vk_usb_push_idle(void);
+/** Re-send RF eco flag to the paired handheld (no-op if unpaired). */
+void vk_usb_push_eco(void);
 /** Cache handheld telemetry from ESP-NOW heartbeat/status. */
 void vk_usb_hh_update(uint8_t battery, uint8_t flags);
 void vk_usb_hh_tick(uint32_t now_ms);

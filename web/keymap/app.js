@@ -209,8 +209,13 @@ let lcdBatPct = 87;
 let lcdFlashTimer = null;
 let lcdClockTimer = null;
 let statusTimer = null;
-let lcdUnix = 0; /* last status unix from device; 0 = use browser clock */
+let lcdUnix = 0; /* last status/sync unix from device; 0 = no wall clock yet */
 let lcdUnixAt = 0; /* Date.now() when lcdUnix was captured */
+const waitPupImg = new Image();
+waitPupImg.src = "wait.png";
+waitPupImg.onload = () => {
+  if (typeof paintLcd === "function") paintLcd();
+};
 
 function lcdCtx() {
   const c = $("lcdCanvas");
@@ -361,20 +366,34 @@ function lcdNowHM() {
       valid: true,
     };
   }
-  const d = new Date();
-  return { hour: d.getHours(), minute: d.getMinutes(), valid: true };
+  return { hour: 0, minute: 0, valid: false };
+}
+
+function lcdWaitPup(ctx) {
+  if (waitPupImg.complete && waitPupImg.naturalWidth > 0) {
+    ctx.drawImage(waitPupImg, 0, 0, LCD.W, LCD.H);
+    return;
+  }
+  lcdTextCentered(ctx, 34, "wait", 2, 2, LCD.MUTED);
 }
 
 function paintLcd() {
   const ctx = lcdCtx();
   if (!ctx) return;
-  lcdFill(ctx, LCD.BG);
   const pairing = lcdMode === "pair";
+  const { hour, minute, valid } = lcdNowHM();
+  const showWait = lcdMode === "away" || (lcdMode === "idle" && !valid);
+
+  if (showWait) {
+    lcdWaitPup(ctx);
+    return;
+  }
+
+  lcdFill(ctx, LCD.BG);
   lcdPip(ctx, lcdLinked, pairing);
   lcdBattery(ctx, lcdBatPct);
   lcdStatusBar(ctx, lcdLinked, pairing);
 
-  const { hour, minute, valid } = lcdNowHM();
   switch (lcdMode) {
     case "pair":
       lcdTextCentered(ctx, 32, "pair", 3, 3, LCD.WARM);
@@ -389,10 +408,6 @@ function paintLcd() {
       break;
     case "no":
       lcdTextCentered(ctx, 30, "no", 3, 4, LCD.NO);
-      break;
-    case "away":
-      lcdClock(ctx, hour, minute, valid);
-      lcdTextCentered(ctx, 64, "away", 1, 1, LCD.MUTED);
       break;
     default:
       lcdClock(ctx, hour, minute, valid);
@@ -661,6 +676,8 @@ function setConnected(on) {
   $("blRange").disabled = !on;
   const idleEl = $("idleBlank");
   if (idleEl) idleEl.disabled = !on;
+  const ecoEl = $("ecoRadio");
+  if (ecoEl) ecoEl.disabled = !on;
   if (!on) {
     lcdLinked = false;
     if (!lcdFlashTimer) lcdMode = "idle";
@@ -759,7 +776,7 @@ async function loadStatus() {
     lcdUnixAt = Date.now();
   }
   if (!lcdFlashTimer && (lcdMode === "idle" || lcdMode === "away")) {
-    lcdMode = "idle";
+    lcdMode = st.linked ? "idle" : "away";
   }
   paintLcd();
   return st;
@@ -835,6 +852,46 @@ async function sendIdleBlank(on) {
   if (el && reported != null) el.checked = reported;
   const note = line && line.includes("no peer") ? "（手持未连接，已记在接收端）" : "";
   log(`闲置息屏：${(el && el.checked) || on ? "开" : "关"}${note}`);
+}
+
+function parseWireEco(line) {
+  const m = String(line).trim().match(/^E\s*=\s*(\d+)/i);
+  if (!m) return null;
+  return Number(m[1]) !== 0;
+}
+
+async function loadEcoRadio() {
+  const el = $("ecoRadio");
+  if (!el || !writer) return;
+  clearCdcForCmd();
+  await writeLine("E?");
+  const line = await readUntil((l) => /^E=/.test(l.trim()), 1500);
+  const on = line && parseWireEco(line);
+  if (on == null) {
+    log("射频省电读取失败");
+    return;
+  }
+  el.checked = on;
+  log(on ? "射频省电：开" : "射频省电：关");
+}
+
+async function sendEcoRadio(on) {
+  if (!writer) return;
+  clearCdcForCmd();
+  await writeLine(on ? "E 1" : "E 0");
+  const line = await readUntil(
+    (l) => l.includes("E ok") || l.includes("E err") || /^E=/.test(l.trim()),
+    1500
+  );
+  if (line && line.includes("err")) {
+    log("射频省电设置失败");
+    return;
+  }
+  const reported = line && parseWireEco(line);
+  const el = $("ecoRadio");
+  if (el && reported != null) el.checked = reported;
+  const note = line && line.includes("no peer") ? "（手持未连接，已记在接收端）" : "";
+  log(`射频省电：${(el && el.checked) || on ? "开" : "关"}${note}`);
 }
 
 async function sendBacklight(duty) {
@@ -958,6 +1015,9 @@ async function openAndInit(selectedPort) {
     await loadIdleBlank();
   } catch (_) { /* optional */ }
   try {
+    await loadEcoRadio();
+  } catch (_) { /* optional */ }
+  try {
     const st = await loadStatus();
     if (st) {
       log(`状态：${st.linked ? "手持在线" : "手持离线"} · 电量 ${st.battery}%`);
@@ -1079,6 +1139,7 @@ async function loadFromDevice() {
   render();
   await loadBacklight();
   await loadIdleBlank();
+  await loadEcoRadio();
   await loadStatus();
   log(`已读取 ${line.trim()}`);
 }
@@ -1283,6 +1344,9 @@ function wireUi() {
   });
   $("idleBlank")?.addEventListener("change", (e) => {
     sendIdleBlank(!!e.target.checked).catch((err) => log(String(err)));
+  });
+  $("ecoRadio")?.addEventListener("change", (e) => {
+    sendEcoRadio(!!e.target.checked).catch((err) => log(String(err)));
   });
 
   document.querySelectorAll(".keycard").forEach((card) => {

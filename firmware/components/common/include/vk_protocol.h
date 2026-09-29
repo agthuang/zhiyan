@@ -26,6 +26,7 @@ typedef enum {
     VK_PKT_BACKLIGHT  = 7, /* rx → handheld: PWM duty 0–255 */
     VK_PKT_OSD        = 8, /* rx → handheld: colored English word / clear */
     VK_PKT_IDLE_BLANK = 9, /* rx → handheld: idle backlight blank enable */
+    VK_PKT_ECO        = 10, /* rx → handheld: ESP-NOW connectionless RF eco */
 } vk_pkt_type_t;
 
 #define VK_BL_DEFAULT   64u /* ≈25% — matches board.h soft backlight */
@@ -102,6 +103,11 @@ typedef struct __attribute__((packed)) {
     uint8_t _pad;
     uint16_t timeout_sec; /* 0 = default (20s); reserved for Phase 1B */
 } vk_idle_blank_t;
+
+typedef struct __attribute__((packed)) {
+    uint8_t enabled; /* 0 = RF always on, 1 = connectionless wake window */
+    uint8_t _pad;
+} vk_eco_t;
 
 size_t vk_pack(uint8_t *out, size_t cap, vk_pkt_type_t type, uint16_t seq,
                const void *payload, uint8_t len);

@@ -112,6 +112,8 @@ static void send_pair_ack(const uint8_t mac[6])
     ack.unix_time = vk_usb_unix_time();
     rx_radio_send(VK_PKT_PAIR_ACK, &ack, sizeof(ack));
     vk_usb_push_backlight();
+    vk_usb_push_idle();
+    vk_usb_push_eco();
     /* Pair ACK already carries unix_time; push a heartbeat too so a missed ACK
      * still lands the clock, and a later host T sync can refresh the same path. */
     vk_usb_push_time();
@@ -275,7 +277,10 @@ static void app_task(void *arg)
         bool hh_linked = vk_usb_hh_linked();
         if (hh_linked && !hh_was_linked) {
             vk_usb_push_time();
-            ESP_LOGI(TAG, "handheld link-up → push time");
+            vk_usb_push_backlight();
+            vk_usb_push_idle();
+            vk_usb_push_eco();
+            ESP_LOGI(TAG, "handheld link-up → push time/bl/idle/eco");
         }
         hh_was_linked = hh_linked;
 
@@ -324,5 +329,5 @@ void app_main(void)
 
     xTaskCreate(app_task, "app", 6144, NULL, 5, NULL);
     ESP_LOGI(TAG, "receiver ready — Zhiyan Receiver");
-    vk_usb_cdc_printf("Zhiyan Receiver ready. T?/T; S?; K?/K; B?/B; I?/I; P?/P!; O/#RGB WORD.\r\n");
+    vk_usb_cdc_printf("Zhiyan Receiver ready. T?/T; S?; K?/K; B?/B; I?/I; E?/E; P?/P!; O/#RGB WORD.\r\n");
 }

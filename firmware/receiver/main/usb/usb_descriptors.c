@@ -72,9 +72,9 @@ static char const *string_desc_arr[] = {
     "Zhiyan",
     "Zhiyan Receiver",
     "0001",
-    "Vibe CDC",
-    "Vibe Keys",
-    "Vibe Mic",
+    "Zhiyan CDC",
+    "Zhiyan Keys",
+    "Zhiyan Mic",
 };
 
 static uint16_t _desc_str[32];

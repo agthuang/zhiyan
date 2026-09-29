@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Flash VibeKey receiver firmware. Put the receiver in download mode first
+# Flash Zhiyan receiver firmware. Put the receiver in download mode first
 # (hold BOOT, tap RESET, release BOOT), then run:
 #   ./tools/flash_receiver.sh [/dev/cu.usbmodemXXXX]
 set -euo pipefail
@@ -25,4 +25,4 @@ fi
   0x8000 "$RX/.pio/build/esp32s3/partitions.bin" \
   0x10000 "$RX/.pio/build/esp32s3/firmware.bin"
 
-echo "Done. Open http://localhost:8765 and connect the receiver CDC."
+echo "Done. Open http://localhost:8766 and connect the receiver CDC."

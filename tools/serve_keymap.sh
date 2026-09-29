@@ -28,11 +28,11 @@ if [[ ! -f "$KEY" || ! -f "$CRT" ]]; then
   echo "生成自签证书 → $CERT_DIR"
   openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
     -keyout "$KEY" -out "$CRT" \
-    -subj "/CN=VibeKey/O=VibeKey/C=CN" \
+    -subj "/CN=Zhiyan/O=Zhiyan/C=CN" \
     -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null \
   || openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
     -keyout "$KEY" -out "$CRT" \
-    -subj "/CN=VibeKey"
+    -subj "/CN=Zhiyan"
 fi
 
 echo "HTTPS on https://<本机局域网IP>:$PORT （首次需在浏览器点「继续访问」）"

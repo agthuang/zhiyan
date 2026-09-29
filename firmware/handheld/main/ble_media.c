@@ -67,35 +67,7 @@ static uint32_t now_ms(void)
 
 bool ble_media_boot_hold_yes(uint32_t hold_ms)
 {
-    /*
-     * Intended UX: finger on Yes, then flip power.
-     * - Yes already down at boot → count to hold_ms → BLE
-     * - Yes not down → return false in ~250ms (no BT screen on normal boot)
-     * - Yes released early → cancel
-     */
-    uint32_t held = 0;
-    uint32_t no_press = 0;
-    uint32_t window = hold_ms + 300;
-    uint32_t t0 = now_ms();
-    while ((now_ms() - t0) < window) {
-        if (buttons_raw_mask() & VK_KEYMASK_YES) {
-            no_press = 0;
-            held += 20;
-            if (held >= hold_ms) {
-                return true;
-            }
-        } else if (held == 0) {
-            no_press += 20;
-            if (no_press >= 250) {
-                return false;
-            }
-        } else {
-            /* Released before threshold — normal mode. */
-            return false;
-        }
-        vTaskDelay(pdMS_TO_TICKS(20));
-    }
-    return false;
+    return buttons_boot_hold(VK_KEYMASK_YES, hold_ms);
 }
 
 static void kb_send(uint8_t keycode)
